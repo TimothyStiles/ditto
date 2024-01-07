@@ -1,12 +1,16 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"hash/fnv"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"github.com/google/go-github/v57/github"
 )
 
 func getCacheFilePath(endpoint string) string {
@@ -55,6 +59,58 @@ func getCachedResponse(endpoint string) ([]byte, error) {
 	return data, nil
 }
 
-func makeAPICall(endpoint string) ([]byte, error) {
-	return getCachedResponse(endpoint)
+type cachingHTTPClient struct {
+	Transport http.RoundTripper
+}
+
+func (c *cachingHTTPClient) RoundTrip(req *http.Request) (*http.Response, error) {
+	endpoint := req.URL.String()
+
+	data, err := getCachedResponse(endpoint)
+	if err == nil {
+		reader := io.NopCloser(bytes.NewReader(data))
+		return &http.Response{
+			StatusCode: 200,
+			Body:       reader,
+		}, nil
+	}
+
+	resp, err := c.Transport.RoundTrip(req)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	err = saveCache(endpoint, data)
+	if err != nil {
+		return nil, err
+	}
+
+	resp.Body = io.NopCloser(bytes.NewReader(data))
+	return resp, nil
+}
+
+func altClient() {
+	client := github.NewClient(&http.Client{
+		Transport: &cachingHTTPClient{
+			Transport: http.DefaultTransport,
+		},
+	})
+
+	fmt.Println(client)
+
+	// Use client...
+	repos, _, err := client.Repositories.List(context.Background(), "TimothyStiles", nil)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	for _, repo := range repos {
+		fmt.Println(repo.GetName())
+	}
 }

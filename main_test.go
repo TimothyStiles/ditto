@@ -7,6 +7,11 @@ import (
 	"testing"
 )
 
+func TestMain(m *testing.M) {
+	os.RemoveAll(".cache")
+	os.Exit(m.Run())
+}
+
 func TestGetCacheFilePath(t *testing.T) {
 	endpoint := "https://example.com/api"
 	expected := filepath.Join(".cache", "362656336a5f086c")
@@ -90,25 +95,8 @@ func TestGetCachedResponse(t *testing.T) {
 		t.Errorf("Failed to remove cache file: %v", err)
 	}
 }
-func TestMakeAPICall(t *testing.T) {
-	endpoint := "https://example.com/api"
-	expectedData := []byte("test data")
-	expectedFilePath := getCacheFilePath(endpoint)
 
-	// Test making API call
-	result, err := makeAPICall(endpoint)
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-
-	// Compare API response with expected data
-	if !bytes.Equal(result, expectedData) {
-		t.Errorf("Expected data: %s, but got: %s", expectedData, result)
-	}
-
-	// Clean up the cache file
-	err = os.Remove(expectedFilePath)
-	if err != nil {
-		t.Errorf("Failed to remove cache file: %v", err)
-	}
+func TestAltClient(t *testing.T) {
+	// Call the altClient function
+	altClient()
 }
