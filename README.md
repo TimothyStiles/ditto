@@ -13,6 +13,10 @@ All you have to do is replace your API client's `http.Client` with `ditto.Client
 go get github.com/TimothyStiles/ditto
 ```
 
+## Usage
+https://github.com/TimothyStiles/ditto/blob/80c31ef9b298933da6e1a5ac03ce5e189e04ed85/example_test.go#L12-L29
+
+
 All config can be done in `TestMain` See this example below.
 
 You hate mocking 3rd party apis? Ditto.
