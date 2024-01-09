@@ -2,6 +2,8 @@ package ditto
 
 import (
 	"bytes"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
@@ -13,7 +15,7 @@ func TestMain(m *testing.M) {
 
 func TestGetCacheFilePath(t *testing.T) {
 	endpoint := "https://example.com/api"
-	expected := filepath.Join(".cache", "362656336a5f086c")
+	expected := filepath.Join(".ditto", "362656336a5f086c")
 	result := getCacheFilePath(endpoint)
 	if result != expected {
 		t.Errorf("Expected` %s, but got %s", expected, result)
@@ -63,4 +65,40 @@ func TestLoadCache(t *testing.T) {
 	if !bytes.Equal(result, expectedData) {
 		t.Errorf("Expected data: %s, but got: %s", expectedData, result)
 	}
+}
+func TestCachingHTTPClient_RoundTrip_CachedResponse(t *testing.T) {
+	// Define the test URL and expected response
+	url := "https://example.com/api"
+
+	// Remove any existing cache for the test URL
+	cacheFilePath := getCacheFilePath(url)
+	_ = os.Remove(cacheFilePath)
+
+	// Create a new caching HTTP client
+	client := &CachingHTTPClient{
+		Transport: http.DefaultTransport,
+	}
+
+	// Create a new HTTP request
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		t.Fatalf("Failed to create HTTP request: %v", err)
+	}
+
+	// Make the HTTP request using the caching HTTP client
+	resp, err := client.RoundTrip(req)
+	if err != nil {
+		t.Fatalf("Failed to make HTTP request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Read the response body
+	_, err = io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("Failed to read response body: %v", err)
+	}
+
+	// clean up the cache file again just for good measure
+	_ = os.Remove(cacheFilePath)
+
 }
