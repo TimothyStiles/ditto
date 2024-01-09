@@ -21,12 +21,12 @@ func TestGetCacheFilePath(t *testing.T) {
 		t.Errorf("Expected` %s, but got %s", expected, result)
 	}
 }
-func TestSaveCache(t *testing.T) {
+func TestCache(t *testing.T) {
 	endpoint := "https://example.com/api"
 	data := []byte("test data")
 	expectedFilePath := getCacheFilePath(endpoint)
 
-	err := saveCache(endpoint, data)
+	err := cache(endpoint, data)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestSaveCache(t *testing.T) {
 		t.Errorf("Failed to remove cache file: %v", err)
 	}
 }
-func TestLoadCache(t *testing.T) {
+func TestRetrieve(t *testing.T) {
 	endpoint := "https://example.com/api"
 	expectedData := []byte("test data")
 	expectedFilePath := getCacheFilePath(endpoint)
@@ -56,7 +56,7 @@ func TestLoadCache(t *testing.T) {
 	defer os.Remove(expectedFilePath)
 
 	// Test loading cache
-	result, err := loadCache(endpoint)
+	result, err := retrieve(endpoint)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}

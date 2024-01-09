@@ -17,7 +17,7 @@ func getCacheFilePath(endpoint string) string {
 	return filepath.Join(".ditto", hashedEndpoint)
 }
 
-func loadCache(endpoint string) ([]byte, error) {
+func retrieve(endpoint string) ([]byte, error) {
 	cacheFilePath := getCacheFilePath(endpoint)
 	if _, err := os.Stat(cacheFilePath); os.IsNotExist(err) {
 		return nil, err
@@ -25,7 +25,7 @@ func loadCache(endpoint string) ([]byte, error) {
 	return os.ReadFile(cacheFilePath)
 }
 
-func saveCache(endpoint string, data []byte) error {
+func cache(endpoint string, data []byte) error {
 	cacheFilePath := getCacheFilePath(endpoint)
 	os.MkdirAll(filepath.Dir(cacheFilePath), os.ModePerm)
 	return os.WriteFile(cacheFilePath, data, 0644)
@@ -38,7 +38,7 @@ type CachingHTTPClient struct {
 func (c *CachingHTTPClient) RoundTrip(req *http.Request) (*http.Response, error) {
 	endpoint := req.URL.String()
 
-	data, err := loadCache(endpoint)
+	data, err := retrieve(endpoint)
 	if err == nil {
 		reader := io.NopCloser(bytes.NewReader(data))
 		return &http.Response{
@@ -57,7 +57,7 @@ func (c *CachingHTTPClient) RoundTrip(req *http.Request) (*http.Response, error)
 		return nil, err
 	}
 
-	err = saveCache(endpoint, data)
+	err = cache(endpoint, data)
 	if err != nil {
 		return nil, err
 	}
