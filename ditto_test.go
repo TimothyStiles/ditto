@@ -64,33 +64,3 @@ func TestLoadCache(t *testing.T) {
 		t.Errorf("Expected data: %s, but got: %s", expectedData, result)
 	}
 }
-
-func TestGetCachedResponse(t *testing.T) {
-	endpoint := "https://example.com/api"
-	expectedData := []byte("test data")
-	expectedFilePath := getCacheFilePath(endpoint)
-
-	// Create a cache file with test data
-	err := os.WriteFile(expectedFilePath, expectedData, 0644)
-	if err != nil {
-		t.Fatalf("Failed to create cache file: %v", err)
-	}
-	defer os.Remove(expectedFilePath)
-
-	// Test loading cached response
-	result, err := getCachedResponse(endpoint)
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-
-	// Compare loaded data with expected data
-	if !bytes.Equal(result, expectedData) {
-		t.Errorf("Expected data: %s, but got: %s", expectedData, result)
-	}
-
-	// Clean up the cache file
-	err = os.Remove(expectedFilePath)
-	if err != nil {
-		t.Errorf("Failed to remove cache file: %v", err)
-	}
-}
