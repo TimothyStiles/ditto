@@ -66,7 +66,7 @@ func TestRetrieve(t *testing.T) {
 		t.Errorf("Expected data: %s, but got: %s", expectedData, result)
 	}
 }
-func TestCachingHTTPClient_RoundTrip_CachedResponse(t *testing.T) {
+func TestCachingTransport_RoundTrip_CachedResponse(t *testing.T) {
 	// Define the test URL and expected response
 	url := "https://example.com/api"
 
@@ -75,7 +75,7 @@ func TestCachingHTTPClient_RoundTrip_CachedResponse(t *testing.T) {
 	_ = os.Remove(cacheFilePath)
 
 	// Create a new caching HTTP client
-	client := &CachingHTTPClient{
+	client := &CachingTransport{
 		Transport: http.DefaultTransport,
 	}
 

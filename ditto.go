@@ -10,32 +10,19 @@ import (
 	"path/filepath"
 )
 
-func getCacheFilePath(endpoint string) string {
-	hash := fnv.New64a()
-	hash.Write([]byte(endpoint))
-	hashedEndpoint := fmt.Sprintf("%x", hash.Sum(nil))
-	return filepath.Join(".ditto", hashedEndpoint)
-}
-
-func retrieve(endpoint string) ([]byte, error) {
-	cacheFilePath := getCacheFilePath(endpoint)
-	if _, err := os.Stat(cacheFilePath); os.IsNotExist(err) {
-		return nil, err
+func Client() *http.Client {
+	return &http.Client{
+		Transport: &CachingTransport{
+			Transport: http.DefaultTransport,
+		},
 	}
-	return os.ReadFile(cacheFilePath)
 }
 
-func cache(endpoint string, data []byte) error {
-	cacheFilePath := getCacheFilePath(endpoint)
-	os.MkdirAll(filepath.Dir(cacheFilePath), os.ModePerm)
-	return os.WriteFile(cacheFilePath, data, 0644)
-}
-
-type CachingHTTPClient struct {
+type CachingTransport struct {
 	Transport http.RoundTripper
 }
 
-func (c *CachingHTTPClient) RoundTrip(req *http.Request) (*http.Response, error) {
+func (c *CachingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	endpoint := req.URL.String()
 
 	data, err := retrieve(endpoint)
@@ -64,4 +51,25 @@ func (c *CachingHTTPClient) RoundTrip(req *http.Request) (*http.Response, error)
 
 	resp.Body = io.NopCloser(bytes.NewReader(data))
 	return resp, nil
+}
+
+func getCacheFilePath(endpoint string) string {
+	hash := fnv.New64a()
+	hash.Write([]byte(endpoint))
+	hashedEndpoint := fmt.Sprintf("%x", hash.Sum(nil))
+	return filepath.Join(".ditto", hashedEndpoint)
+}
+
+func retrieve(endpoint string) ([]byte, error) {
+	cacheFilePath := getCacheFilePath(endpoint)
+	if _, err := os.Stat(cacheFilePath); os.IsNotExist(err) {
+		return nil, err
+	}
+	return os.ReadFile(cacheFilePath)
+}
+
+func cache(endpoint string, data []byte) error {
+	cacheFilePath := getCacheFilePath(endpoint)
+	os.MkdirAll(filepath.Dir(cacheFilePath), os.ModePerm)
+	return os.WriteFile(cacheFilePath, data, 0644)
 }

@@ -3,18 +3,13 @@ package ditto_test
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	"github.com/TimothyStiles/ditto"
 	"github.com/google/go-github/v57/github"
 )
 
 func Example_basic() {
-	client := github.NewClient(&http.Client{
-		Transport: &ditto.CachingHTTPClient{
-			Transport: http.DefaultTransport,
-		},
-	})
+	client := github.NewClient(ditto.Client()) // instead of http.DefaultClient we use ditto.Client()
 
 	// Use client...
 	repos, _, err := client.Repositories.List(context.Background(), "octocat", nil)
