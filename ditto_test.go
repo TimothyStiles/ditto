@@ -8,7 +8,6 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	os.RemoveAll(".cache")
 	os.Exit(m.Run())
 }
 
@@ -94,9 +93,4 @@ func TestGetCachedResponse(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to remove cache file: %v", err)
 	}
-}
-
-func TestAltClient(t *testing.T) {
-	// Call the altClient function
-	altClient()
 }

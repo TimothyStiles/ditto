@@ -2,15 +2,12 @@ package ditto
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"hash/fnv"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
-
-	"github.com/google/go-github/v57/github"
 )
 
 func getCacheFilePath(endpoint string) string {
@@ -59,14 +56,14 @@ func getCachedResponse(endpoint string) ([]byte, error) {
 	return data, nil
 }
 
-type cachingHTTPClient struct {
+type CachingHTTPClient struct {
 	Transport http.RoundTripper
 }
 
-func (c *cachingHTTPClient) RoundTrip(req *http.Request) (*http.Response, error) {
+func (c *CachingHTTPClient) RoundTrip(req *http.Request) (*http.Response, error) {
 	endpoint := req.URL.String()
 
-	data, err := getCachedResponse(endpoint)
+	data, err := loadCache(endpoint)
 	if err == nil {
 		reader := io.NopCloser(bytes.NewReader(data))
 		return &http.Response{
@@ -92,25 +89,4 @@ func (c *cachingHTTPClient) RoundTrip(req *http.Request) (*http.Response, error)
 
 	resp.Body = io.NopCloser(bytes.NewReader(data))
 	return resp, nil
-}
-
-func altClient() {
-	client := github.NewClient(&http.Client{
-		Transport: &cachingHTTPClient{
-			Transport: http.DefaultTransport,
-		},
-	})
-
-	fmt.Println(client)
-
-	// Use client...
-	repos, _, err := client.Repositories.List(context.Background(), "TimothyStiles", nil)
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
-
-	for _, repo := range repos {
-		fmt.Println(repo.GetName())
-	}
 }
