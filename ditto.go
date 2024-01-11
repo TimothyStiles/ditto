@@ -37,7 +37,7 @@ func (c *CachingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 
 	// So I originally tried implementing this to be a lot cleaner with a majority of the logic in retrieve and cache functions. However,
 	// I'm not sure what was going on but there was some sort of data race where the cache file was being written to correctly but if the
-	// roundtrip called cache then the GitHub example test would panic and not receive the data from the same response the cache file was
+	// RoundTrip called cache then the GitHub example test would panic and not receive the data from the same response the cache file was
 	// being written from in the same call to this function (RoundTrip).
 
 	endpoint := req.URL.String()
