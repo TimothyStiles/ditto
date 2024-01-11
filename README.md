@@ -14,4 +14,4 @@ go get github.com/TimothyStiles/ditto
 ```
 
 ## Usage
-https://github.com/TimothyStiles/ditto/blob/80c31ef9b298933da6e1a5ac03ce5e189e04ed85/example_test.go#L12-L29
+https://github.com/TimothyStiles/ditto/blob/da8d0f083d92b16aa99029b9dfbc8edb862bbf5b/example_test.go#L11-L24
