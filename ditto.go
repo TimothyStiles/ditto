@@ -22,6 +22,15 @@ type CachingTransport struct {
 	Transport http.RoundTripper
 }
 
+type CachedResponse struct {
+	StatusCode int
+	Status     string
+	Method     string
+	URL        string
+	Header     http.Header
+	Body       string
+}
+
 func (c *CachingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	endpoint := req.URL.String()
 

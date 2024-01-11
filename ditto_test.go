@@ -108,8 +108,8 @@ func TestCachingTransport_RoundTrip_CachedResponse(t *testing.T) {
 }
 
 func TestGitHubExampleRegression(t *testing.T) {
-	os.RemoveAll(".ditto")
-	defer os.RemoveAll(".ditto")
+	// os.Remove(".ditto/e5daf97c0fa2c6f7")
+	// defer os.Remove(".ditto/e5daf97c0fa2c6f7")
 	client := github.NewClient(Client()) // instead of http.DefaultClient we use ditto.Client()
 
 	// Use client...
