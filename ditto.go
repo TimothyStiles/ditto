@@ -2,6 +2,7 @@ package ditto
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"io"
@@ -22,16 +23,18 @@ type CachingTransport struct {
 	Transport http.RoundTripper
 }
 
-func (c *CachingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	endpoint := req.URL.String()
+type CachedResponse struct {
+	StatusCode int
+	Status     string
+	Method     string
+	URL        string
+	Header     http.Header
+}
 
-	data, err := retrieve(endpoint)
+func (c *CachingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	data, err := retrieve(req)
 	if err == nil {
-		reader := io.NopCloser(bytes.NewReader(data))
-		return &http.Response{
-			StatusCode: 200,
-			Body:       reader,
-		}, nil
+		return data, nil
 	}
 
 	resp, err := c.Transport.RoundTrip(req)
@@ -39,37 +42,83 @@ func (c *CachingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		return nil, err
 	}
 
-	data, err = io.ReadAll(resp.Body)
+	err = cache(req, resp)
 	if err != nil {
 		return nil, err
 	}
 
-	err = cache(endpoint, data)
-	if err != nil {
-		return nil, err
-	}
-
-	resp.Body = io.NopCloser(bytes.NewReader(data))
 	return resp, nil
 }
 
-func getCacheFilePath(endpoint string) string {
+func getCacheDir(req *http.Request) string {
 	hash := fnv.New64a()
-	hash.Write([]byte(endpoint))
+	// add endpoint and method together to get a unique hash
+	endpoint := req.URL.String()
+	method := req.Method
+	stringToHash := fmt.Sprintf("%s%s", endpoint, method)
+
+	hash.Write([]byte(stringToHash))
 	hashedEndpoint := fmt.Sprintf("%x", hash.Sum(nil))
 	return filepath.Join(".ditto", hashedEndpoint)
 }
 
-func retrieve(endpoint string) ([]byte, error) {
-	cacheFilePath := getCacheFilePath(endpoint)
-	if _, err := os.Stat(cacheFilePath); os.IsNotExist(err) {
+func retrieve(req *http.Request) (*http.Response, error) {
+	cacheDir := getCacheDir(req)
+	if _, err := os.Stat(cacheDir); os.IsNotExist(err) {
 		return nil, err
 	}
-	return os.ReadFile(cacheFilePath)
+
+	body, err := os.ReadFile(filepath.Join(cacheDir, "body"))
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := os.ReadFile(filepath.Join(cacheDir, "data"))
+	if err != nil {
+		return nil, err
+	}
+
+	cachedResp := CachedResponse{}
+	err = json.Unmarshal(data, &cachedResp)
+	if err != nil {
+		return nil, err
+	}
+
+	reader := io.NopCloser(bytes.NewReader(body))
+	return &http.Response{
+		StatusCode: cachedResp.StatusCode,
+		Status:     cachedResp.Status,
+		Header:     cachedResp.Header,
+		Body:       reader,
+	}, nil
 }
 
-func cache(endpoint string, data []byte) error {
-	cacheFilePath := getCacheFilePath(endpoint)
-	os.MkdirAll(filepath.Dir(cacheFilePath), os.ModePerm)
-	return os.WriteFile(cacheFilePath, data, 0644)
+func cache(req *http.Request, resp *http.Response) error {
+	cacheDir := getCacheDir(req)
+	os.MkdirAll(cacheDir, os.ModePerm)
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	err = os.WriteFile(filepath.Join(cacheDir, "body"), body, 0644)
+	if err != nil {
+		return err
+	}
+
+	cachedResp := CachedResponse{
+		StatusCode: resp.StatusCode,
+		Status:     resp.Status,
+		URL:        req.URL.String(),
+		Method:     req.Method,
+		Header:     resp.Header,
+	}
+
+	data, err := json.Marshal(cachedResp)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(filepath.Join(cacheDir, "data"), data, 0644)
 }

@@ -1,88 +1,49 @@
 package ditto
 
 import (
-	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
-func TestMain(m *testing.M) {
-	os.Exit(m.Run())
+func TestGetCacheDir(t *testing.T) {
+	req, err := http.NewRequest("GET", "https://example.com/api", nil)
+	if err != nil {
+		t.Fatalf("Failed to create HTTP request: %v", err)
+	}
+
+	cacheDir := getCacheDir(req)
+
+	expectedCacheDir := ".ditto/316496c36323dd38"
+	if cacheDir != expectedCacheDir {
+		t.Errorf("Expected cache directory `%s`, but got `%s`", expectedCacheDir, cacheDir)
+	}
 }
 
-func TestGetCacheFilePath(t *testing.T) {
-	endpoint := "https://example.com/api"
-	expected := filepath.Join(".ditto", "362656336a5f086c")
-	result := getCacheFilePath(endpoint)
-	if result != expected {
-		t.Errorf("Expected` %s, but got %s", expected, result)
-	}
-}
-func TestCache(t *testing.T) {
-	endpoint := "https://example.com/api"
-	data := []byte("test data")
-	expectedFilePath := getCacheFilePath(endpoint)
-
-	err := cache(endpoint, data)
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-
-	// Check if the cache file exists
-	_, err = os.Stat(expectedFilePath)
-	if err != nil {
-		t.Errorf("Cache file does not exist: %v", err)
-	}
-
-	// Clean up the cache file
-	err = os.Remove(expectedFilePath)
-	if err != nil {
-		t.Errorf("Failed to remove cache file: %v", err)
-	}
-}
-func TestRetrieve(t *testing.T) {
-	endpoint := "https://example.com/api"
-	expectedData := []byte("test data")
-	expectedFilePath := getCacheFilePath(endpoint)
-
-	// Create a cache file with test data
-	err := os.WriteFile(expectedFilePath, expectedData, 0644)
-	if err != nil {
-		t.Fatalf("Failed to create cache file: %v", err)
-	}
-	defer os.Remove(expectedFilePath)
-
-	// Test loading cache
-	result, err := retrieve(endpoint)
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-
-	// Compare loaded data with expected data
-	if !bytes.Equal(result, expectedData) {
-		t.Errorf("Expected data: %s, but got: %s", expectedData, result)
-	}
-}
 func TestCachingTransport_RoundTrip_CachedResponse(t *testing.T) {
 	// Define the test URL and expected response
 	url := "https://example.com/api"
 
+	// Create a new HTTP request
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		t.Fatalf("Failed to create HTTP request: %v", err)
+	}
+
 	// Remove any existing cache for the test URL
-	cacheFilePath := getCacheFilePath(url)
-	_ = os.Remove(cacheFilePath)
+	cacheDir := getCacheDir(req)
+	err = os.RemoveAll(cacheDir)
+	if err != nil {
+		t.Fatalf("Failed to remove cache directory: %v", err)
+	}
 
 	// Create a new caching HTTP client
 	client := &CachingTransport{
 		Transport: http.DefaultTransport,
-	}
-
-	// Create a new HTTP request
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		t.Fatalf("Failed to create HTTP request: %v", err)
 	}
 
 	// Make the HTTP request using the caching HTTP client
@@ -99,6 +60,94 @@ func TestCachingTransport_RoundTrip_CachedResponse(t *testing.T) {
 	}
 
 	// clean up the cache file again just for good measure
-	_ = os.Remove(cacheFilePath)
+	_ = os.Remove(cacheDir)
 
+}
+func TestCache(t *testing.T) {
+	endpoint := "https://example.com/api"
+	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		t.Fatalf("Failed to create HTTP request: %v", err)
+	}
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(`{"message": "Hello, World!"}`)),
+	}
+
+	err = cache(req, resp)
+	if err != nil {
+		t.Fatalf("Failed to cache response: %v", err)
+	}
+
+	cacheDir := getCacheDir(req)
+	body, err := os.ReadFile(filepath.Join(cacheDir, "body"))
+	if err != nil {
+		t.Fatalf("Failed to read cached body: %v", err)
+	}
+
+	expectedBody := `{"message": "Hello, World!"}`
+	if string(body) != expectedBody {
+		t.Errorf("Expected body `%s`, but got `%s`", expectedBody, string(body))
+	}
+
+	data, err := os.ReadFile(filepath.Join(cacheDir, "data"))
+	if err != nil {
+		t.Fatalf("Failed to read cached data: %v", err)
+	}
+
+	var cachedResp CachedResponse
+	err = json.Unmarshal(data, &cachedResp)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal cached response: %v", err)
+	}
+
+	expectedStatusCode := http.StatusOK
+	if cachedResp.StatusCode != expectedStatusCode {
+		t.Errorf("Expected status code `%d`, but got `%d`", expectedStatusCode, cachedResp.StatusCode)
+	}
+
+	expectedContentType := "application/json"
+	if cachedResp.Header.Get("Content-Type") != expectedContentType {
+		t.Errorf("Expected Content-Type `%s`, but got `%s`", expectedContentType, cachedResp.Header.Get("Content-Type"))
+	}
+}
+func TestRetrieve(t *testing.T) {
+	req, err := http.NewRequest("POST", "https://example.com/api", nil)
+	if err != nil {
+		t.Fatalf("Failed to create HTTP request: %v", err)
+	}
+
+	// Remove any existing cache for the test URL
+	cacheDir := getCacheDir(req)
+	defer os.RemoveAll(cacheDir)
+
+	// make request and cache it
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(`{"message": "Hello, World!"}`)),
+	}
+
+	err = cache(req, resp)
+	if err != nil {
+		t.Fatalf("Failed to cache response: %v", err)
+	}
+
+	// retrieve cached response
+	cachedResp, err := retrieve(req)
+	if err != nil {
+		t.Fatalf("Failed to retrieve cached response: %v", err)
+	}
+
+	// check that the response body is the same
+	body, err := io.ReadAll(cachedResp.Body)
+	if err != nil {
+		t.Fatalf("Failed to read response body: %v", err)
+	}
+
+	expectedBody := `{"message": "Hello, World!"}`
+	if string(body) != expectedBody {
+		t.Errorf("Expected body `%s`, but got `%s`", expectedBody, string(body))
+	}
 }
