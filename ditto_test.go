@@ -108,16 +108,21 @@ func TestCachingTransport_RoundTrip_CachedResponse(t *testing.T) {
 }
 
 func TestGitHubExampleRegression(t *testing.T) {
-	// os.Remove(".ditto/e5daf97c0fa2c6f7")
-	// defer os.Remove(".ditto/e5daf97c0fa2c6f7")
-	client := github.NewClient(Client()) // instead of http.DefaultClient we use ditto.Client()
+	os.Remove("ditto/028587485a8f03d6")
+	defer os.Remove(".ditto/028587485a8f03d6")
+	token := os.Getenv("GITHUB_TOKEN")
+
+	// instead of http.DefaultClient we use ditto.Client()
+	client := github.NewClient(Client()).WithAuthToken(token) // auth token is optional
 
 	// Use client...
-	repos, _, err := client.Repositories.List(context.Background(), "octocat", nil)
+	repos, _, err := client.Repositories.List(context.Background(), "TimothyStiles", nil)
 	if err != nil {
 		fmt.Println("Error:", err)
 		return
 	}
 
-	fmt.Println(repos[0].GetName())
+	if repos[0].GetName() != "action-discord" {
+		t.Errorf("Expected %s, but got %s", "action-discord", repos[0].GetName())
+	}
 }
