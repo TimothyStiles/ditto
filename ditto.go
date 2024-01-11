@@ -2,6 +2,7 @@ package ditto
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"io"
@@ -22,14 +23,38 @@ type CachingTransport struct {
 	Transport http.RoundTripper
 }
 
+type CachedResponse struct {
+	StatusCode int
+	Status     string
+	Method     string
+	URL        string
+	Header     http.Header
+	Body       string
+}
+
+// RoundTrip implements the RoundTripper interface.
 func (c *CachingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+
+	// So I originally tried implementing this to be a lot cleaner with a majority of the logic in retrieve and cache functions. However,
+	// I'm not sure what was going on but there was some sort of data race where the cache file was being written to correctly but if the
+	// RoundTrip called cache then the GitHub example test would panic and not receive the data from the same response the cache file was
+	// being written from in the same call to this function (RoundTrip).
+
 	endpoint := req.URL.String()
 
 	data, err := retrieve(endpoint)
 	if err == nil {
-		reader := io.NopCloser(bytes.NewReader(data))
+
+		var cachedResp CachedResponse
+		err = json.Unmarshal(data, &cachedResp)
+		if err != nil {
+			return nil, err
+		}
+		reader := io.NopCloser(bytes.NewReader([]byte(cachedResp.Body)))
 		return &http.Response{
-			StatusCode: 200,
+			StatusCode: cachedResp.StatusCode,
+			Status:     cachedResp.Status,
+			Header:     cachedResp.Header,
 			Body:       reader,
 		}, nil
 	}
@@ -39,17 +64,31 @@ func (c *CachingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		return nil, err
 	}
 
-	data, err = io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	err = cache(endpoint, data)
+	cachedResp := CachedResponse{
+		StatusCode: resp.StatusCode,
+		Status:     resp.Status,
+		URL:        req.URL.String(),
+		Method:     req.Method,
+		Header:     resp.Header,
+		Body:       string(body),
+	}
+
+	marshalledResponse, err := json.Marshal(cachedResp)
 	if err != nil {
 		return nil, err
 	}
 
-	resp.Body = io.NopCloser(bytes.NewReader(data))
+	err = cache(endpoint, marshalledResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	resp.Body = io.NopCloser(bytes.NewReader(body))
 	return resp, nil
 }
 
