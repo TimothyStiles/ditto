@@ -2,11 +2,15 @@ package ditto
 
 import (
 	"bytes"
+	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/google/go-github/v57/github"
 )
 
 func TestMain(m *testing.M) {
@@ -101,4 +105,19 @@ func TestCachingTransport_RoundTrip_CachedResponse(t *testing.T) {
 	// clean up the cache file again just for good measure
 	_ = os.Remove(cacheFilePath)
 
+}
+
+func TestGitHubExampleRegression(t *testing.T) {
+	os.RemoveAll(".ditto")
+	defer os.RemoveAll(".ditto")
+	client := github.NewClient(Client()) // instead of http.DefaultClient we use ditto.Client()
+
+	// Use client...
+	repos, _, err := client.Repositories.List(context.Background(), "octocat", nil)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	fmt.Println(repos[0].GetName())
 }
