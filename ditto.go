@@ -29,6 +29,7 @@ type CachedResponse struct {
 	Method     string
 	URL        string
 	Header     http.Header
+	Body       string
 }
 
 func (c *CachingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -68,12 +69,7 @@ func retrieve(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 
-	body, err := os.ReadFile(filepath.Join(cacheDir, "body"))
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := os.ReadFile(filepath.Join(cacheDir, "data"))
+	data, err := os.ReadFile(cacheDir)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +80,8 @@ func retrieve(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 
-	reader := io.NopCloser(bytes.NewReader(body))
+	bodyBytes := []byte(cachedResp.Body) // Convert string to byte slice
+	reader := io.NopCloser(bytes.NewReader(bodyBytes))
 	return &http.Response{
 		StatusCode: cachedResp.StatusCode,
 		Status:     cachedResp.Status,
@@ -95,14 +92,9 @@ func retrieve(req *http.Request) (*http.Response, error) {
 
 func cache(req *http.Request, resp *http.Response) error {
 	cacheDir := getCacheDir(req)
-	os.MkdirAll(cacheDir, os.ModePerm)
+	os.MkdirAll(filepath.Dir(cacheDir), os.ModePerm)
 
 	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	err = os.WriteFile(filepath.Join(cacheDir, "body"), body, 0644)
 	if err != nil {
 		return err
 	}
@@ -113,6 +105,7 @@ func cache(req *http.Request, resp *http.Response) error {
 		URL:        req.URL.String(),
 		Method:     req.Method,
 		Header:     resp.Header,
+		Body:       string(body),
 	}
 
 	data, err := json.Marshal(cachedResp)
@@ -120,5 +113,5 @@ func cache(req *http.Request, resp *http.Response) error {
 		return err
 	}
 
-	return os.WriteFile(filepath.Join(cacheDir, "data"), data, 0644)
+	return os.WriteFile(cacheDir, data, 0644)
 }
