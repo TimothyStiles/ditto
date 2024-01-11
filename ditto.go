@@ -36,13 +36,11 @@ type CachedResponse struct {
 func (c *CachingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	// So I originally tried implementing this to be a lot cleaner with a majority of the logic in retrieve and cache functions. However,
-	// I'm not sure what was going on but there was some sort of data race where the cache file was being written to correctly but if the
+	// I'm not sure what was going on but there was some sort of data race where the cache file was being written to correctly but if
 	// RoundTrip called cache then the GitHub example test would panic and not receive the data from the same response the cache file was
 	// being written from in the same call to this function (RoundTrip).
 
-	endpoint := req.URL.String()
-
-	data, err := retrieve(endpoint)
+	data, err := retrieve(req)
 	if err == nil {
 
 		var cachedResp CachedResponse
@@ -83,7 +81,7 @@ func (c *CachingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		return nil, err
 	}
 
-	err = cache(endpoint, marshalledResponse)
+	err = cache(req, marshalledResponse)
 	if err != nil {
 		return nil, err
 	}
@@ -92,23 +90,26 @@ func (c *CachingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	return resp, nil
 }
 
-func getCacheFilePath(endpoint string) string {
+func getCacheFilePath(req *http.Request) string {
 	hash := fnv.New64a()
-	hash.Write([]byte(endpoint))
+	url := req.URL.String()
+	method := req.Method
+	endpointPlusMethod := fmt.Sprintf("%s:%s", method, url)
+	hash.Write([]byte(endpointPlusMethod))
 	hashedEndpoint := fmt.Sprintf("%x", hash.Sum(nil))
 	return filepath.Join(".ditto", hashedEndpoint)
 }
 
-func retrieve(endpoint string) ([]byte, error) {
-	cacheFilePath := getCacheFilePath(endpoint)
+func retrieve(req *http.Request) ([]byte, error) {
+	cacheFilePath := getCacheFilePath(req)
 	if _, err := os.Stat(cacheFilePath); os.IsNotExist(err) {
 		return nil, err
 	}
 	return os.ReadFile(cacheFilePath)
 }
 
-func cache(endpoint string, data []byte) error {
-	cacheFilePath := getCacheFilePath(endpoint)
+func cache(req *http.Request, data []byte) error {
+	cacheFilePath := getCacheFilePath(req)
 	os.MkdirAll(filepath.Dir(cacheFilePath), os.ModePerm)
 	return os.WriteFile(cacheFilePath, data, 0644)
 }

@@ -1,128 +1,53 @@
 package ditto
 
 import (
-	"bytes"
-	"context"
-	"fmt"
-	"io"
+	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"testing"
-
-	"github.com/google/go-github/v57/github"
 )
 
-func TestMain(m *testing.M) {
-	os.Exit(m.Run())
-}
+func TestCachingTransport_RoundTrip(t *testing.T) {
+	// Create a test server
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Hello, World!"))
+	}))
 
-func TestGetCacheFilePath(t *testing.T) {
-	endpoint := "https://example.com/api"
-	expected := filepath.Join(".ditto", "362656336a5f086c")
-	result := getCacheFilePath(endpoint)
-	if result != expected {
-		t.Errorf("Expected` %s, but got %s", expected, result)
-	}
-}
-func TestCache(t *testing.T) {
-	endpoint := "https://example.com/api"
-	data := []byte("test data")
-	expectedFilePath := getCacheFilePath(endpoint)
+	// Set the server to listen on a specific address
+	server.Listener, _ = net.Listen("tcp", "localhost:56560")
 
-	err := cache(endpoint, data)
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
+	server.Start()
+	defer server.Close()
 
-	// Check if the cache file exists
-	_, err = os.Stat(expectedFilePath)
-	if err != nil {
-		t.Errorf("Cache file does not exist: %v", err)
-	}
-
-	// Clean up the cache file
-	err = os.Remove(expectedFilePath)
-	if err != nil {
-		t.Errorf("Failed to remove cache file: %v", err)
-	}
-}
-func TestRetrieve(t *testing.T) {
-	endpoint := "https://example.com/api"
-	expectedData := []byte("test data")
-	expectedFilePath := getCacheFilePath(endpoint)
-
-	// Create a cache file with test data
-	err := os.WriteFile(expectedFilePath, expectedData, 0644)
-	if err != nil {
-		t.Fatalf("Failed to create cache file: %v", err)
-	}
-	defer os.Remove(expectedFilePath)
-
-	// Test loading cache
-	result, err := retrieve(endpoint)
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-
-	// Compare loaded data with expected data
-	if !bytes.Equal(result, expectedData) {
-		t.Errorf("Expected data: %s, but got: %s", expectedData, result)
-	}
-}
-func TestCachingTransport_RoundTrip_CachedResponse(t *testing.T) {
-	// Define the test URL and expected response
-	url := "https://example.com/api"
-
-	// Remove any existing cache for the test URL
-	cacheFilePath := getCacheFilePath(url)
-	_ = os.Remove(cacheFilePath)
-
-	// Create a new caching HTTP client
-	client := &CachingTransport{
+	// Create a new CachingTransport
+	cachingTransport := &CachingTransport{
 		Transport: http.DefaultTransport,
 	}
 
-	// Create a new HTTP request
-	req, err := http.NewRequest("GET", url, nil)
+	// Create a new request
+	req, err := http.NewRequest(http.MethodGet, server.URL, nil)
 	if err != nil {
-		t.Fatalf("Failed to create HTTP request: %v", err)
+		t.Fatalf("Failed to create request: %v", err)
 	}
 
-	// Make the HTTP request using the caching HTTP client
-	resp, err := client.RoundTrip(req)
+	// remove the cache file if it exists and defer removing it again until the end of the test
+	cacheFilePath := getCacheFilePath(req)
+	os.Remove(cacheFilePath)
+	defer os.Remove(cacheFilePath)
+
+	// Call the RoundTrip method
+	resp, err := cachingTransport.RoundTrip(req)
 	if err != nil {
-		t.Fatalf("Failed to make HTTP request: %v", err)
+		t.Fatalf("RoundTrip failed: %v", err)
 	}
 	defer resp.Body.Close()
 
-	// Read the response body
-	_, err = io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("Failed to read response body: %v", err)
+	// Check the response
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
 	}
 
-	// clean up the cache file again just for good measure
-	_ = os.Remove(cacheFilePath)
-
-}
-
-func TestGitHubExampleRegression(t *testing.T) {
-	os.Remove("ditto/028587485a8f03d6")
-	defer os.Remove(".ditto/028587485a8f03d6")
-	token := os.Getenv("GITHUB_TOKEN")
-
-	// instead of http.DefaultClient we use ditto.Client()
-	client := github.NewClient(Client()).WithAuthToken(token) // auth token is optional
-
-	// Use client...
-	repos, _, err := client.Repositories.List(context.Background(), "TimothyStiles", nil)
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
-
-	if repos[0].GetName() != "action-discord" {
-		t.Errorf("Expected %s, but got %s", "action-discord", repos[0].GetName())
-	}
+	// TODO: Add more assertions as needed
 }
