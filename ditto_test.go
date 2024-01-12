@@ -51,3 +51,9 @@ func TestCachingTransport_RoundTrip(t *testing.T) {
 
 	// TODO: Add more assertions as needed
 }
+func TestFindGoModDir(t *testing.T) {
+	_, err := findGoModDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+}

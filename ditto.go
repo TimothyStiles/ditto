@@ -97,7 +97,12 @@ func getCacheFilePath(req *http.Request) string {
 	endpointPlusMethod := fmt.Sprintf("%s:%s", method, url)
 	hash.Write([]byte(endpointPlusMethod))
 	hashedEndpoint := fmt.Sprintf("%x", hash.Sum(nil))
-	return filepath.Join(".ditto", hashedEndpoint)
+
+	goModDir, err := findGoModDir()
+	if err != nil {
+		panic(err)
+	}
+	return filepath.Join(goModDir, ".ditto", hashedEndpoint)
 }
 
 func retrieve(req *http.Request) ([]byte, error) {
@@ -112,4 +117,28 @@ func cache(req *http.Request, data []byte) error {
 	cacheFilePath := getCacheFilePath(req)
 	os.MkdirAll(filepath.Dir(cacheFilePath), os.ModePerm)
 	return os.WriteFile(cacheFilePath, data, 0644)
+}
+
+func findGoModDir() (string, error) {
+	path, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+
+	for {
+		if path == home || path == "//" {
+			return "", nil
+		}
+
+		if _, err := os.Stat(filepath.Join(path, "go.mod")); err == nil {
+			return path, nil
+		}
+
+		path = filepath.Dir(path)
+	}
 }
