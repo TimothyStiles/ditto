@@ -1,6 +1,7 @@
 package ditto
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -53,6 +54,15 @@ func TestCachingTransport_RoundTrip(t *testing.T) {
 }
 func TestFindGoModDir(t *testing.T) {
 	_, err := findGoModDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+func TestGetGoModuleName(t *testing.T) {
+	// Create a temporary directory for testing
+
+	moduleName, err := getGoModuleName()
+	fmt.Println(moduleName)
 	if err != nil {
 		t.Fatal(err)
 	}
