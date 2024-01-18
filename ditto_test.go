@@ -49,8 +49,6 @@ func TestCachingTransport_RoundTrip(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
 	}
-
-	// TODO: Add more assertions as needed
 }
 func TestFindGoModDir(t *testing.T) {
 	_, err := findGoModDir()
