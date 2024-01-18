@@ -96,7 +96,13 @@ func getCacheFilePath(req *http.Request) string {
 	hash := fnv.New64a()
 	url := req.URL.String()
 	topLevelFuncName := getTopLevelFuncName()
-	fmt.Println(topLevelFuncName)
+	// get tip of file path
+	funcNameBase := filepath.Base(topLevelFuncName)
+
+	packageAndFuncName := strings.Split(funcNameBase, ".")
+	packageName := packageAndFuncName[0]
+	funcName := packageAndFuncName[1]
+
 	method := req.Method
 	endpointPlusMethod := fmt.Sprintf("%s:%s", method, url)
 	hash.Write([]byte(endpointPlusMethod))
@@ -106,7 +112,7 @@ func getCacheFilePath(req *http.Request) string {
 	if err != nil {
 		panic(err)
 	}
-	return filepath.Join(goModDir, ".ditto", hashedEndpoint)
+	return filepath.Join(goModDir, ".ditto", packageName, funcName, hashedEndpoint)
 }
 
 func retrieve(req *http.Request) ([]byte, error) {
@@ -190,7 +196,7 @@ func getTopLevelFuncName() string {
 		funcName = runtime.FuncForPC(pc).Name()
 		depth++
 
-		if strings.Contains(funcName, goModuleName) && (!strings.Contains(funcName, "github.com/TimothyStiles/ditto") || strings.Contains(funcName, "github.com/TimothyStiles/ditto_test")) { // TODO: make this more robust
+		if strings.Contains(funcName, goModuleName) && (!strings.Contains(funcName, "github.com/TimothyStiles/ditto") || strings.Contains(funcName, "github.com/TimothyStiles/ditto_test") || strings.Contains(funcName, "github.com/TimothyStiles/ditto.Test") || strings.Contains(funcName, "github.com/TimothyStiles/ditto.Example")) { // TODO: make this more robust
 			break
 		}
 
