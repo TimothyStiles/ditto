@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 )
 
 func Client() *http.Client {
@@ -93,6 +95,14 @@ func (c *CachingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 func getCacheFilePath(req *http.Request) string {
 	hash := fnv.New64a()
 	url := req.URL.String()
+	topLevelFuncName := getTopLevelFuncName()
+	// get tip of file path
+	funcNameBase := filepath.Base(topLevelFuncName)
+
+	packageAndFuncName := strings.Split(funcNameBase, ".")
+	packageName := packageAndFuncName[0]
+	funcName := packageAndFuncName[1]
+
 	method := req.Method
 	endpointPlusMethod := fmt.Sprintf("%s:%s", method, url)
 	hash.Write([]byte(endpointPlusMethod))
@@ -102,7 +112,7 @@ func getCacheFilePath(req *http.Request) string {
 	if err != nil {
 		panic(err)
 	}
-	return filepath.Join(goModDir, ".ditto", hashedEndpoint)
+	return filepath.Join(goModDir, ".ditto", packageName, funcName, hashedEndpoint)
 }
 
 func retrieve(req *http.Request) ([]byte, error) {
@@ -141,4 +151,56 @@ func findGoModDir() (string, error) {
 
 		path = filepath.Dir(path)
 	}
+}
+
+func getGoModuleName() (string, error) {
+	goModDir, err := findGoModDir()
+	if err != nil {
+		return "", err
+	}
+
+	goModPath := filepath.Join(goModDir, "go.mod")
+	goMod, err := os.ReadFile(goModPath)
+	if err != nil {
+		return "", err
+	}
+
+	// turn the go.mod file into a string and split it by newlines
+	goModLines := strings.Split(string(goMod), "\n")
+	// the first line of the go.mod file should be the module name
+	goModuleLine := goModLines[0] // replace magic number with something more robust
+	// split the module line by spaces and the module name should be the second element
+	goModuleName := strings.Split(goModuleLine, " ")[1] // replace magic number with something more robust
+
+	return goModuleName, nil
+}
+
+func getTopLevelFuncName() string {
+	depth := 1 // 0 will be this function, 1 will be the caller of this function
+	var pc uintptr
+	// var file string
+	// var line int
+	var ok bool
+	var funcName string
+
+	goModuleName, err := getGoModuleName()
+	if err != nil {
+		panic(err)
+	}
+
+	for {
+		pc, _, _, ok = runtime.Caller(depth)
+		if !ok {
+			break
+		}
+		funcName = runtime.FuncForPC(pc).Name()
+		depth++
+
+		if strings.Contains(funcName, goModuleName) && (!strings.Contains(funcName, "github.com/TimothyStiles/ditto") || strings.Contains(funcName, "github.com/TimothyStiles/ditto_test") || strings.Contains(funcName, "github.com/TimothyStiles/ditto.Test") || strings.Contains(funcName, "github.com/TimothyStiles/ditto.Example")) { // TODO: make this more robust
+			break
+		}
+
+	}
+
+	return funcName
 }
